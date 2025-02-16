@@ -35,7 +35,11 @@ $ npm run start:prod
 ## Infrastructure deployment
 
 ```bash
-# sam build
-$ sam deploy --guided
+ sam build
+ sam deploy --guided
 ```
+## Deactivation of infrastructure
 
+```bash
+ sam delete
+```
