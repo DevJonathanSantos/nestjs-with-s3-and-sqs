@@ -1,9 +1,9 @@
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  sorteios-backend-serverless
+  nestjs-with-s3-and-sqs
 
-  Sample SAM Template for sorteios-backend-serverless
+  Sample SAM Template
 
 Globals:
   Function:
@@ -14,8 +14,6 @@ Globals:
       LogFormat: JSON
     Environment:
       Variables:
-        EVENT_BUS_NAME: SorteiosEventBus
-        EVENT_PATTERN_SOURCE: totalpag-digital-account
   Api:
     TracingEnabled: true
 
@@ -30,188 +28,61 @@ Parameters:
     Default: dev
 Resources:
   ##########################################################################
-  #                                 SQS                                    #
+  #                                 S3 Bucket                              #
   ##########################################################################
-  EventBridgeToSqsPolicy:
-    Type: AWS::SQS::QueuePolicy
+  S3Bucket:
+    Type: AWS::S3::Bucket
     Properties:
+      BucketName: !Sub 'nestjs-with-s3-and-sqs-bucket-${Env}'
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldFiles
+            Status: Enabled
+            ExpirationInDays: 30
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      Tags:
+        - Key: Environment
+          Value: !Ref Env
+
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket
       PolicyDocument:
         Statement:
           - Effect: Allow
-            Principal:
-              Service: events.amazonaws.com
-            Action: SQS:SendMessage
-            Resource: "*"
-      Queues:
-        - !Ref CreateOrderQueue
-        - !Ref NotifyOrderPaymentQueue
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Sub 'arn:aws:s3:::nestjs-with-s3-and-sqs-bucket-${Env}/*'
 
-  CreateOrderQueue:
+  ##########################################################################
+  #                                 SQS                                    #
+  ##########################################################################
+
+  CreateOrderTestQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: CreateOrder
+      QueueName: CreateOrderTest
       VisibilityTimeout: 110
       RedrivePolicy:
-        deadLetterTargetArn: !GetAtt CreateOrderDLQ.Arn
+        deadLetterTargetArn: !GetAtt CreateOrderTestDLQ.Arn
         maxReceiveCount: 3
-  CreateOrderDLQ:
+  CreateOrderTestDLQ:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: CreateOrderDLQ
+      QueueName: CreateOrderTestDLQ
       VisibilityTimeout: 110
 
-  NotifyOrderPaymentQueue:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: NotifyOrderPayment
-      VisibilityTimeout: 110
-      RedrivePolicy:
-        deadLetterTargetArn: !GetAtt NotifyOrderPaymentDLQ.Arn
-        maxReceiveCount: 3
-  NotifyOrderPaymentDLQ:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: NotifyOrderPaymentDLQ
-      VisibilityTimeout: 110
   ##########################################################################
   #                              Layers                                   #
   ##########################################################################
-  PrizeDrawDepsLayer:
-    Type: AWS::Serverless::LayerVersion
-    Properties:
-      LayerName: PrizeDrawDepsLayer
-      Description: Dependencies layer for the prize draw lambda
-      ContentUri: backend/layers/deps
-      CompatibleRuntimes:
-        - nodejs20.x
-        - nodejs18.x
-    Metadata:
-      BuildMethod: nodejs20.x
-      BuildArchitecture: x86_64
+
   ##########################################################################
   #                                 Lambdas                                #
   ##########################################################################
-  # CreateOrderFunction:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     FunctionName: CreateOrder
-  #     CodeUri: backend/
-  #     Handler: create-prize-draw.CreateOrderHandler
-  #     Runtime: nodejs20.x
-  #     Architectures:
-  #       - x86_64
-  #     Layers:
-  #       - !Ref PrizeDrawDepsLayer
-  #     Policies:
-  #       - AWSLambdaBasicExecutionRole
-  #       - Statement:
-  #           - Effect: Allow
-  #             Action:
-  #               - events:PutEvents
-  #             Resource: "*"
-  #           - Effect: Allow
-  #             Action:
-  #               - dynamodb:PutItem
-  #               - dynamodb:GetItem
-  #               - dynamodb:UpdateItem
-  #               - dynamodb:DeleteItem
-  #               - dynamodb:Scan
-  #               - dynamodb:Query
-  #               - dynamodb:BatchWriteItem
-  #             Resource: "*"
-  #     Events:
-  #       CreateOrderEvent:
-  #         Type: SQS
-  #         Properties:
-  #           Queue: !GetAtt CreateOrderQueue.Arn
-  #           BatchSize: 10
-  #           FunctionResponseTypes:
-  #             - ReportBatchItemFailures
-  #   Metadata:
-  #     BuildMethod: esbuild
-  #     BuildProperties:
-  #       Minify: true
-  #       Target: es2020
-  #       Sourcemap: true
-  #       EntryPoints:
-  #         - src/lambdas/create-prize-draw.ts
-  #       External:
-  #         - "@aws-sdk/client-eventbridge"
-  #         - "@aws-sdk/client-dynamodb"
-  #         - zod
-  #         - zod-validation-error
-
-  CreateOrderFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: CreateOrder
-      CodeUri: backend/
-      Handler: create-order.createOrderHandler
-      Runtime: nodejs20.x
-      Architectures:
-        - x86_64
-      Layers:
-        - !Ref PrizeDrawDepsLayer
-      Policies:
-        - AWSLambdaBasicExecutionRole
-      Events:
-        CreateOrderEvent:
-          Type: SQS
-          Properties:
-            Queue: !GetAtt CreateOrderQueue.Arn
-            BatchSize: 10
-            FunctionResponseTypes:
-              - ReportBatchItemFailures
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2020
-        Sourcemap: true
-        EntryPoints:
-          - src/lambdas/create-order.ts
-        External:
-          - "@aws-sdk/client-eventbridge"
-          - "@aws-sdk/client-dynamodb"
-          - zod
-          - zod-validation-error
-          - knex
-          - axios
-          - qrcode
-
-  NotifyOrderPaymentFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: NotifyOrderPayment
-      CodeUri: backend/
-      Handler: notify-payment.notifyPaymentHandler
-      Runtime: nodejs20.x
-      Architectures:
-        - x86_64
-      Policies:
-        - AWSLambdaBasicExecutionRole
-      Events:
-        NotifyOrderPaymentEvent:
-          Type: SQS
-          Properties:
-            Queue: !GetAtt NotifyOrderPaymentQueue.Arn
-            BatchSize: 10
-            FunctionResponseTypes:
-              - ReportBatchItemFailures
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2020
-        Sourcemap: true
-        EntryPoints:
-          - src/lambdas/notify-payment.ts
-        External:
-          - "@aws-sdk/client-eventbridge"
-          - "@aws-sdk/client-dynamodb"
-          - zod
-          - zod-validation-error
-          - knex
-          - axios
-          - qrcode
-# sam build; sam local invoke CreateOrder --event events/event.json

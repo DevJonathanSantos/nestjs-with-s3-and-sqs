@@ -13,7 +13,7 @@ export class CreateProductService {
   ) {
     const { description } = request;
 
-    const bucketName = 'conrado-prizedraws'; //process.env.AWS_S3_BUCKET_NAME;
+    const bucketName = process.env.AWS_S3_BUCKET_NAME;
     const region = process.env.AWS_REGION || 'us-east-1';
     const uploadedImages = [];
 

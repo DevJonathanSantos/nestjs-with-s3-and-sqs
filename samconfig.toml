@@ -1,0 +1,11 @@
+version = 0.1
+[default.deploy.parameters]
+stack_name = "nestjs-with-s3-and-sqs"
+resolve_s3 = true
+s3_prefix = "nestjs-with-s3-and-sqs"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+disable_rollback = true
+parameter_overrides = "Env=\"dev\""
+image_repositories = []

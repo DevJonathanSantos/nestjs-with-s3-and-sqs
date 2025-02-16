@@ -5,17 +5,20 @@ import {
   ReceiveMessageCommand,
   DeleteMessageCommand,
 } from '@aws-sdk/client-sqs';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class SQSProvider {
   private sqs: SQSClient;
 
-  constructor() {
+  constructor(private readonly configService: ConfigService) {
     this.sqs = new SQSClient({
-      region: process.env.AWS_REGION,
+      region: this.configService.get<string>('AWS_REGION'),
       credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        accessKeyId: this.configService.get<string>('AWS_ACCESS_KEY_ID'),
+        secretAccessKey: this.configService.get<string>(
+          'AWS_SECRET_ACCESS_KEY',
+        ),
       },
     });
   }

@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'nestjs-with-s3-and-sqs
+
+  Sample SAM Template
+
+  '
+Globals:
+  Function:
+    Timeout: 100
+    MemorySize: 512
+    Tracing: Active
+    LoggingConfig:
+      LogFormat: JSON
+    Environment:
+      Variables: null
+  Api:
+    TracingEnabled: true
+Parameters:
+  Env:
+    Type: String
+    AllowedValues:
+    - dev
+    - sbox
+    - prd
+    Description: Environment in which the application will be deployed. Allowed values
+      [dev, sbox, prd]
+    Default: dev
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: nestjs-with-s3-and-sqs-bucket-${Env}
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+        - Id: ExpireOldFiles
+          Status: Enabled
+          ExpirationInDays: 30
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      Tags:
+      - Key: Environment
+        Value:
+          Ref: Env
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: S3Bucket
+      PolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal: '*'
+          Action: s3:GetObject
+          Resource:
+            Fn::Sub: arn:aws:s3:::nestjs-with-s3-and-sqs-bucket-${Env}/*
+  CreateOrderTestQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: CreateOrderTest
+      VisibilityTimeout: 110
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt:
+          - CreateOrderTestDLQ
+          - Arn
+        maxReceiveCount: 3
+  CreateOrderTestDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: CreateOrderTestDLQ
+      VisibilityTimeout: 110
